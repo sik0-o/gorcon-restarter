@@ -2,6 +2,7 @@ package restarter
 
 import (
 	"fmt"
+	"math"
 	"time"
 
 	beservice "github.com/sik0-o/gorcon-restarter/v2/internal/battleye"
@@ -18,22 +19,38 @@ func NewService(beService *beservice.Service) (*Service, error) {
 }
 
 func (s *Service) Restart() {
-	checkTicker := time.NewTicker(15 * time.Second)
+	checkTicker := time.NewTicker(time.Second)
 	restartTime := time.Now().Add(s.beService.Config().Restart.Period)
 	restart := false
 
-	// Check
+	lockTime := s.beService.Config().Restart.ServerLock.Minutes()
+	if lockTime <= 0 {
+		lockTime = 1
+	}
+
+	checkCounter := 0
+
+	// Ожидаем время до рестарта
 	for t := range checkTicker.C {
 
+		// Время до рестарта
 		tDiff := restartTime.Sub(t)
 
-		if tDiff.Minutes() <= 2 {
+		// Если до отключения осталось времени меньше или равное времени перед локом, то выходим из цикла и начинаем рестарт.
+		if tDiff.Minutes() <= lockTime {
 			s.beService.Logger().Info("SERVER NEED RESTART")
 			restart = true
 			break
 		}
+		checkCounter++
 
-		s.beService.Say(fmt.Sprintf("Server restart %f", tDiff.Minutes()))
+		if tDiff >= 3600 && checkCounter%3600 == 0 {
+			s.beService.Say(fmt.Sprintf(s.beService.Config().Restart.Announcements.At, restartTime.String()))
+		} else if tDiff >= 15*60 && checkCounter%15*60 == 0 {
+			s.beService.Say(fmt.Sprintf(s.beService.Config().Restart.Announcements.Min, math.Round(tDiff.Minutes())))
+		} else if tDiff <= 30 && checkCounter%5 == 0 {
+			s.beService.Say(fmt.Sprintf(s.beService.Config().Restart.Announcements.Sec, math.Round(tDiff.Seconds())))
+		}
 	}
 
 	if restart {
