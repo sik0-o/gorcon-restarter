@@ -1,0 +1,12 @@
+servers:
+  server1:
+    host: "serverIP"
+    port: 2305
+    password: "serverPassword"
+    restart:
+      period: 4h
+      serverLock: 2m
+      announcements:
+        at: "Server restart at %d"
+        min: "Server restart after %d min"
+        sec: "Server restart! %d sec"
