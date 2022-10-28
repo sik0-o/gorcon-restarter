@@ -6,6 +6,7 @@ import (
 	"time"
 
 	beservice "github.com/sik0-o/gorcon-restarter/v2/internal/battleye"
+	"go.uber.org/zap"
 )
 
 type Service struct {
@@ -44,11 +45,13 @@ func (s *Service) Restart() {
 		}
 		checkCounter++
 
-		if tDiff >= 3600 && checkCounter%3600 == 0 {
+		s.beService.Logger().Debug("Counter", zap.Float64("seconds", tDiff.Seconds()), zap.Int("counter", checkCounter))
+
+		if tDiff.Seconds() >= 3600 && checkCounter%3600 == 0 {
 			s.beService.Say(fmt.Sprintf(s.beService.Config().Restart.Announcements.At, restartTime.String()))
-		} else if tDiff >= 15*60 && checkCounter%15*60 == 0 {
+		} else if tDiff.Seconds() > 30 && checkCounter%30 == 0 {
 			s.beService.Say(fmt.Sprintf(s.beService.Config().Restart.Announcements.Min, math.Round(tDiff.Minutes())))
-		} else if tDiff <= 30 && checkCounter%5 == 0 {
+		} else if tDiff.Seconds() <= 30 {
 			s.beService.Say(fmt.Sprintf(s.beService.Config().Restart.Announcements.Sec, math.Round(tDiff.Seconds())))
 		}
 	}
