@@ -1,2 +1,6 @@
-*.exe
+# configs & keys
 config/config.yaml
+# common things
+*.exe
+tmp/*
+var/*

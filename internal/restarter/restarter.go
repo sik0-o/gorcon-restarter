@@ -6,16 +6,23 @@ import (
 	"time"
 
 	beservice "github.com/sik0-o/gorcon-restarter/v2/internal/battleye"
+	"github.com/sik0-o/gorcon-restarter/v2/internal/service"
+	act "github.com/sik0-o/gorcon-restarter/v2/internal/service/action"
 	"go.uber.org/zap"
 )
 
 type Service struct {
+	logger    *zap.Logger
 	beService *beservice.Service
+	cs        *service.CommandService
 }
 
-func NewService(beService *beservice.Service) (*Service, error) {
+// TODO: remove beService
+func NewService(logger *zap.Logger, beService *beservice.Service, cs *service.CommandService) (*Service, error) {
 	return &Service{
+		logger:    logger,
 		beService: beService,
+		cs:        cs,
 	}, nil
 }
 
@@ -36,51 +43,65 @@ func (s *Service) Restart() {
 
 		// Время до рестарта
 		tDiff := restartTime.Sub(t)
+		tdSec := math.Round(tDiff.Seconds())
+		tdMin := math.Round(tDiff.Minutes())
 
 		// Если до отключения осталось времени меньше или равное времени перед локом, то выходим из цикла и начинаем рестарт.
-		if tDiff.Minutes() <= lockTime {
-			s.beService.Logger().Info("SERVER NEED RESTART")
+		if tdMin <= lockTime {
+			s.logger.Info("SERVER NEED RESTART")
 			restart = true
 			break
 		}
 		checkCounter++
 
-		s.beService.Logger().Debug("Counter", zap.Float64("seconds", tDiff.Seconds()), zap.Int("counter", checkCounter))
+		s.logger.Debug("Counter", zap.Float64("seconds", tdSec), zap.Int("counter", checkCounter))
 
-		if tDiff.Seconds() >= 3600 && checkCounter%3600 == 0 {
-			s.beService.Say(fmt.Sprintf(s.beService.Config().Restart.Announcements.At, restartTime.String()))
-		} else if tDiff.Seconds() > 30 && checkCounter%30 == 0 {
-			s.beService.Say(fmt.Sprintf(s.beService.Config().Restart.Announcements.Min, math.Round(tDiff.Minutes())))
-		} else if tDiff.Seconds() <= 30 {
-			s.beService.Say(fmt.Sprintf(s.beService.Config().Restart.Announcements.Sec, math.Round(tDiff.Seconds())))
+		var restartMessage string
+		if tdSec >= 3600 && checkCounter%300 == 0 {
+			restartMessage = fmt.Sprintf(s.beService.Config().Restart.Announcements.At, math.Floor(tDiff.Hours()))
+		} else if tdSec < 3600 && tdSec > 30 && checkCounter%30 == 0 {
+			restartMessage = fmt.Sprintf(s.beService.Config().Restart.Announcements.Min, math.Round(tdMin))
+		} else if tdSec <= 30 {
+			restartMessage = fmt.Sprintf(s.beService.Config().Restart.Announcements.Sec, math.Round(tdSec))
+		}
+
+		if len(restartMessage) > 0 {
+			s.logger.Debug("send restart message to players", zap.String("messages", restartMessage))
+			s.cs.Exec(act.NewAnnounce(restartMessage))
 		}
 	}
 
 	if restart {
-		s.beService.Logger().Info("Start server restart")
-		s.beService.Say("Server restart now")
-
-		s.beService.Logger().Info("Lock server")
-		s.beService.Lock()
-
-		s.beService.Logger().Info("Kick players")
-		if err := s.beService.KickAll(); err != nil {
-			//s.beService.Logger().Error("error", zap.Error(err))
-			return
-		}
-
-		s.beService.Logger().Info("Server players kicked")
-		timer1 := time.NewTimer(30 * time.Second)
-
-		<-timer1.C
-
-		s.beService.Logger().Info("Shutdown server")
-
-		if err := s.beService.Shutdown(); err != nil {
-			return
-		}
-
-		s.beService.Logger().Info("Shutdown server performed")
-
+		s.restart()
 	}
+}
+
+func (s *Service) restart() {
+	s.logger.Info("Start server restart")
+	s.cs.Exec(act.NewAnnounce("Server restart now"))
+
+	s.logger.Info("Lock server")
+	s.cs.Exec(act.NewLock())
+
+	timer1 := time.NewTimer(10 * time.Second)
+	<-timer1.C
+
+	s.logger.Info("Kick players")
+	if err := s.cs.Exec(act.NewKick(-1)); err != nil {
+		//s.logger.Error("error", zap.Error(err))
+		return
+	}
+
+	s.logger.Info("Server players kicked")
+
+	timer2 := time.NewTimer(30 * time.Second)
+	<-timer2.C
+
+	s.logger.Info("Shutdown server")
+
+	if err := s.cs.Exec(act.NewShutdown()); err != nil {
+		return
+	}
+
+	s.logger.Info("Shutdown server performed")
 }
