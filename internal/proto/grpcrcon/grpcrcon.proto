@@ -1,0 +1,113 @@
+syntax = "proto3";
+
+package grpcrcon;
+option go_package = "github.com/sik0-o/gorcon-restarter/v2/internal/proto/grpcrcon";
+
+service GRPCRCONService {
+    // Servers returns list of available servers
+    rpc Servers(serversRequest) returns (serversResponse) ;
+    // Restart perform server restart event
+    rpc Restart(restartRequest) returns (statusResponse) ;
+    // Command perform command on server
+    rpc Command(commandRequest) returns (statusResponse) ;
+
+    
+    // Announce all players with message
+    rpc Announce(announceRequest) returns (statusResponse) ;
+    // Kick player or all players from server
+    rpc Kick(kickRequest) returns (statusResponse) ;
+    // Lock server
+    rpc Lock(lockRequest) returns (statusResponse) ;
+    // Say message to server player
+    rpc Say(lockRequest) returns (statusResponse) ;
+    // Shutdown server
+    rpc Shutdown(shutdownRequest) returns (statusResponse) ;
+    // Unlock server
+    rpc Unlock(unlockRequest) returns (statusResponse) ;
+}
+
+message lockRequest {
+    string serverName = 1;
+}
+
+message unlockRequest {
+    string serverName = 1;
+}
+
+message shutdownRequest {
+    string serverName = 1;
+}
+
+message kickRequest {
+    string serverName = 1;
+    string playerId = 2;
+    string message = 3; 
+}
+
+message announceRequest {
+    string serverName = 1;
+    string announce = 2; 
+}
+
+message commandRequest {
+    string serverName = 1;
+    string command = 2;
+}
+
+message statusResponse {
+    ResponseStatus status = 1;
+    string message = 2;
+
+    string serverName = 3;
+}
+
+enum ResponseStatus {
+    ERROR = 0;
+    SUCCESS = 1;
+}
+
+message restartRequest {
+    string serverName = 1;
+    bool now = 2;
+    bool nolock = 3;
+    float kickHoldTime = 4;
+}
+
+message restartResponse {
+    ResponseStatus status = 1;
+    string message = 2;
+
+    string serverName = 3;
+}
+
+message serversRequest {
+  string name = 1;
+}
+
+message serversResponse {
+  string greeting = 1;
+
+  message Announcements {
+    string at = 1;
+    string min = 2;
+    string sec = 3;
+  }
+
+  message RestartConf {
+    int64 period = 1;
+    int64 serverLock = 2;
+    
+    Announcements announcements = 3;
+  }
+
+  message ServerConfig {
+    string name = 1;
+    string host = 2;
+    int32 port = 3;
+    string password = 4;
+    RestartConf restartConf = 5;
+  }
+
+  repeated ServerConfig servers = 2;
+}
+
